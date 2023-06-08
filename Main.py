@@ -245,7 +245,7 @@ class Main:
             block.saved_outline = None
             block.delete_block(self.paint)
         self.set_colors()
-        self.current_color = None
+        self.current_color = self.all_colors[0].color
 
     def render(self, text: str, pos: tuple[int, int]):
 
@@ -283,11 +283,12 @@ class Main:
             self.save()
             self.current_color = cur
 
-    def set_selected(self):
-        cur_color_ind = list(map(lambda k: k.color, self.slots)).index(self.current_color)
-        for i in self.slots:
+    def set_selected(self, painted: bool = True):
+        par = self.slots if painted else self.all_colors
+        cur_color_ind = list(map(lambda k: k.color, par)).index(self.current_color)
+        for i in par:
             x, y = i.pos
-            if cur_color_ind == self.slots.index(i):
+            if cur_color_ind == par.index(i):
                 self.colors_surface.blit(select_img, (x + 7, y + 7))
             else:
                 pygame.draw.rect(self.colors_surface, i.color, pygame.Rect(x + 7, y + 7, 25, 25))
@@ -361,7 +362,7 @@ class Main:
                 self.set_selected()
                 self.render(f'Current time: {self.datetime_to_str(self.start_painting, datetime.now())}', (15, 15))
             else:
-                pygame.draw.rect(self.right_border, BORDER_BG, pygame.Rect((0, 0, 420, 250)))
+                self.set_selected(False)
             self.left_border.blit(self.colors_surface, (0, 280))
 
             pygame.display.update()
