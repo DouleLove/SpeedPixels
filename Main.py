@@ -141,13 +141,14 @@ class Main:
         self.best_time = None
 
         self.body = []
+
+        self.current_color = None
         self.all_colors = []
         self.slots = []
         self.colors_surface = None
+
         self.buttons = [Button('exit', (15, 1020)), Button('save', (15, 15)), Button('restart', (15, 70)),
                         Button('clear', (15, 125))]
-
-        self.current_color = None
 
     def countdown(self, event: int):
         # TODO: create timer, which will show images "GG!", "3", "2", "1" with delay 1s
@@ -157,13 +158,37 @@ class Main:
         # TODO: create and show image with error message: "Max number of colors reached"
         pass
 
-    def create_field(self):
-        for x in range(0, self.paint.get_size()[0], CELL_SIZE):
-            for y in range(0, self.paint.get_size()[1], CELL_SIZE):
-                block = Block(pos=(x, y))
-                block.draw_block(self.paint, PAINT_BG)
-                block.draw_outline(self.paint)
-                self.body.append(block)
+    def clear_field(self, new: bool = True):
+        if new:
+            for x in range(0, self.paint.get_size()[0], CELL_SIZE):
+                for y in range(0, self.paint.get_size()[1], CELL_SIZE):
+                    block = Block(pos=(x, y))
+                    block.draw_block(self.paint, PAINT_BG)
+                    block.draw_outline(self.paint)
+                    self.body.append(block)
+        else:
+            for block in self.body:
+                block.saved_outline = None
+                block.delete_block(self.paint)
+            self.set_colors()
+            self.best_time = None
+            self.current_color = self.all_colors[0].color
+
+    def save(self):
+        if all(block.painted is False for block in self.body):
+            self.clear_field(False)
+        else:
+            for block in self.body:
+                clr = block.color
+                block.saved_outline = clr
+                block.delete_block(self.paint, 3 if block.color else 1)
+            self.set_colors(True)
+            self.start_painting = datetime.now()
+
+    def restart(self):
+        for block in self.body:
+            block.delete_block(self.paint, 3 if block.saved_outline else 1)
+        self.start_painting = datetime.now()
 
     def get_slots(self, check_colors=False) -> list:
 
@@ -224,50 +249,6 @@ class Main:
                 self.current_color = self.slots[0].color
                 self.all_colors = []
 
-    def save(self):
-        if all(block.painted is False for block in self.body):
-            self.clear()
-        else:
-            for block in self.body:
-                clr = block.color
-                block.saved_outline = clr
-                block.delete_block(self.paint, 3 if block.color else 1)
-            self.set_colors(True)
-            self.start_painting = datetime.now()
-
-    def restart(self):
-        for block in self.body:
-            block.delete_block(self.paint, 3 if block.saved_outline else 1)
-        self.start_painting = datetime.now()
-
-    def clear(self):
-        for block in self.body:
-            block.saved_outline = None
-            block.delete_block(self.paint)
-        self.set_colors()
-        self.current_color = self.all_colors[0].color
-
-    def render(self, text: str, pos: tuple[int, int]):
-
-        font = pygame.font.SysFont('arial', 29)
-        rendered = font.render(text, False, WHITE)
-        size = list(rendered.get_size())
-        size[0] += 390 - size[0]
-        txt = pygame.Surface(size)
-        txt.fill(NON_COVERED_BUTTON_BG)
-        txt.blit(rendered, (size[0] // 2 - rendered.get_size()[0] // 2, 0))
-
-        self.right_border.blit(txt, pos)
-
-    @staticmethod
-    def datetime_to_str(start: datetime, end: datetime) -> str:
-
-        t = str((end - start).total_seconds())
-        sec, msec = t.split('.')
-        msec = msec[:2]
-
-        return f'{sec}.{msec}'
-
     def check_painted(self):
         with_outline = list(filter(lambda x: x.saved_outline, self.body))
         painted = list(filter(lambda x: x.painted, self.body))
@@ -293,8 +274,30 @@ class Main:
             else:
                 pygame.draw.rect(self.colors_surface, i.color, pygame.Rect(x + 7, y + 7, 25, 25))
 
+    def render(self, text: str, pos: tuple[int, int]):
+
+        font = pygame.font.SysFont('arial', 29)
+        rendered = font.render(text, False, WHITE)
+        size = list(rendered.get_size())
+        size[0] += 390 - size[0]
+        txt = pygame.Surface(size)
+        txt.fill(NON_COVERED_BUTTON_BG)
+        txt.blit(rendered, (size[0] // 2 - rendered.get_size()[0] // 2, 0))
+
+        self.right_border.blit(txt, pos)
+
+    @staticmethod
+    def datetime_to_str(start: datetime, end: datetime) -> str:
+
+        t = str((end - start).total_seconds())
+        sec, msec = t.split('.')
+        msec = msec[:2]
+
+        return f'{sec}.{msec}'
+
     def event_loop(self):
         for event in pygame.event.get():
+
             mouse_pos = list(pygame.mouse.get_pos())
 
             for button in self.buttons:
@@ -340,13 +343,13 @@ class Main:
                                 if button.text == 'SAVE':
                                     self.save()
                                 if button.text == 'CLEAR':
-                                    self.clear()
+                                    self.clear_field(False)
                                 if button.text == 'RESTART':
                                     self.restart()
 
     def run(self):
 
-        self.create_field()
+        self.clear_field()
         self.set_colors()
 
         while True:
@@ -363,6 +366,7 @@ class Main:
                 self.render(f'Current time: {self.datetime_to_str(self.start_painting, datetime.now())}', (15, 15))
             else:
                 self.set_selected(False)
+                pygame.draw.rect(self.right_border, BORDER_BG, pygame.Rect(0, 0, 420, 300))
             self.left_border.blit(self.colors_surface, (0, 280))
 
             pygame.display.update()
