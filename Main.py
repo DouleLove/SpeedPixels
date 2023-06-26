@@ -35,7 +35,7 @@ ALL_COLORS = sorted([WHITE, SKY, RED, GREEN, BLUE, DARK_GREEN, PINK, YELLOW,
                      ORANGE, CRIMSON, CYAN, LIGHT_PINK, PURPLE, BROWN, LIGHT_GRAY, BLACK])
 
 # images
-select_img = pygame.image.load('selected.png')
+select_img = pygame.image.load('Selected.png')
 
 
 class Block:
