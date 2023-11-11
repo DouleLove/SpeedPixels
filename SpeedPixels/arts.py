@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (QWidget, QPushButton, QVBoxLayout, QInputDialog, QC
                              QGridLayout, QSizePolicy, QHBoxLayout, QMessageBox)
 
 from constants import BORDER_SIZE, CUSTOM, CELLS_NUM, MEDIA_URL, NOT_PROVIDED, Theme
-from utils import Countdown, DataBase, Timer, update_stylesheet, load_menu
+from utils import Countdown, DataBase, Timer, update_stylesheet, load_menu, set_text_color
 
 P = ParamSpec('P')
 
@@ -121,6 +121,10 @@ class Field(QGridLayout):
     def _child_on_click(self):
         if self._is_filled():
             self.filled.emit()
+        if len(set(cell.color.name() for cell in self._cells())) - 1 > 9:
+            QMessageBox.information(self.parent(), 'Error', 'Pixel art can only contain a maximum of 9 colors',
+                                    QMessageBox.Ok, QMessageBox.Ok)
+            self.sender().released.emit()  # type: ignore
 
     def is_saved(self) -> bool:
         return any(cell.is_saved() for cell in self._cells())
@@ -197,6 +201,7 @@ class PixelArt(QWidget):
         self._right_border.addWidget(self._best_time_label, alignment=Qt.AlignHCenter)
         self._right_border.addWidget(self._current_time_label, alignment=Qt.AlignHCenter)
         self._right_border.addWidget(QLabel(self), alignment=Qt.AlignBottom)
+        set_text_color(self._right_border, theme.FONT_COLOR)
 
         for i in range(self._right_border.count()):
             widget = self._right_border.itemAt(i).widget()
@@ -244,6 +249,7 @@ class PixelArt(QWidget):
         self._left_border.addItem(self._palette_layout)
         self._left_border.addStretch()
         self._left_border.addWidget(self._menu_btn, alignment=Qt.AlignBottom)
+        set_text_color(self._left_border, theme.FONT_COLOR)
 
         # main window layout
         self.layout().addItem(self._left_border)
@@ -258,7 +264,7 @@ class PixelArt(QWidget):
         self._palette_svg.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Expanding)
         self._palette_svg.mousePressEvent = self._svg_palette_callback
 
-        self._selected_icon = QIcon(os.path.join(MEDIA_URL, f'general/selected.png'))
+        self._selected_icon = QIcon(os.path.join(MEDIA_URL, 'general/selected.png'))
 
         self._countdown_frames = (
             QPixmap(os.path.join(MEDIA_URL, 'general/gg.png')),
@@ -415,7 +421,7 @@ class PixelArt(QWidget):
             lbl.setVisible(True)
             btn = QPushButton(self)
             btn.setVisible(True)
-            btn.setMaximumSize(50, 50)
+            btn.setFixedSize(40, 40)
             btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             update_stylesheet(btn, f'background-color: {colors[idx].name()};')
             # palette fakes background color, so we will storage background color as button attribute

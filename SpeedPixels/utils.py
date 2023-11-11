@@ -4,6 +4,7 @@ __all__ = (
     'Countdown',
     'DataBase',
     'Timer',
+    'set_text_color',
     'update_stylesheet',
     'load_menu'
 )
@@ -13,7 +14,7 @@ from typing import Callable, Iterable, Iterator, TypeVar, Any
 
 from PyQt5.QtCore import QTimer, QTime, Qt, QSize
 from PyQt5.QtGui import QColor, QPixmap
-from PyQt5.QtWidgets import QWidget, QLabel, QHBoxLayout
+from PyQt5.QtWidgets import QWidget, QLabel, QHBoxLayout, QLayout
 
 from constants import DB_URL, PIXELARTS_DB_TABLE_NAME, SETTINGS_DB_TABLE_NAME, NOT_PROVIDED
 
@@ -36,6 +37,14 @@ def load_menu(current_widget: SupportsCloseAndShow = None) -> None:
     while hasattr(current_widget, 'parent') and current_widget.parent():
         current_widget = current_widget.parent()
     current_widget.close()
+
+
+def set_text_color(layout: QLayout, color: QColor) -> None:
+    for idx in range(layout.count()):
+        try:
+            update_stylesheet(layout.itemAt(idx).widget(), f'color: {color.name()};')
+        except (AttributeError, ValueError):
+            continue
 
 
 def update_stylesheet(obj: SupportsStylesheet, styles: str) -> None:
@@ -157,7 +166,7 @@ class DataBase:
     def _to_db_format(s: str) -> str:
         return s.title().replace(' ', '')
 
-    def get_setting_value(self, setting: str) -> T:  # shortcut to get specified value from settings dictionary
+    def get_setting_value(self, setting: str) -> T:  # shortcut to get value from specified settings dictionary
         return next(iter(self.get_settings(setting).values()))
 
     def get_settings(self, *settings: str) -> dict[str, T]:

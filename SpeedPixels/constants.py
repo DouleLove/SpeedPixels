@@ -41,12 +41,14 @@ class Theme:
 
     def __init__(self, theme: str) -> None:
         if theme == 'light':
+            self.FONT_COLOR = QColor(0, 0, 0)
             self.ART_BACKGROUND_COLOR = QColor(255, 248, 248)
             self.ACTION_BUTTONS_BACKGROUND_COLOR = QColor(255, 245, 248)
             self.CELL_DEFAULT_COLOR = QColor(184, 184, 184)
             self.PREVIEW_BACKGROUND_COLOR = QColor(234, 244, 244)
             self.HOVERED_PREVIEW_BACKGROUND_COLOR = QColor(200, 215, 210)
         else:
+            self.FONT_COLOR = QColor(189, 189, 189)
             self.ART_BACKGROUND_COLOR = QColor(84, 84, 84)
             self.ACTION_BUTTONS_BACKGROUND_COLOR = QColor(100, 100, 100)
             self.CELL_DEFAULT_COLOR = QColor(64, 64, 64)
