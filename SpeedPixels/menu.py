@@ -6,14 +6,14 @@ import os
 import sys
 from typing import Never, TypeVar
 
-from PyQt5.QtCore import Qt, QEvent
-from PyQt5.QtGui import QPalette, QBrush, QPixmap, QMouseEvent, QCloseEvent, QMovie, QIcon
+from PyQt5.QtCore import Qt, QEvent, QVariantAnimation, pyqtSignal
+from PyQt5.QtGui import QPalette, QBrush, QPixmap, QMouseEvent, QCloseEvent, QMovie, QIcon, QTransform
 from PyQt5.QtWidgets import (QWidget, QGridLayout, QLabel, QVBoxLayout, QHBoxLayout, QPushButton,
                              QScrollArea, QSpacerItem, QSizePolicy, QLayout)
 
 from arts import CustomArt, SavedArt
 from constants import MEDIA_URL, PREVIEWS_NUM_PER_ROW, Theme
-from utils import DataBase, update_stylesheet
+from utils import DataBase, set_text_color, update_stylesheet
 
 T = TypeVar('T')
 
@@ -22,9 +22,14 @@ db = DataBase()
 
 class BasePreview(QWidget):
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget, path: str) -> None:
         super().__init__(parent)
         self.parent = lambda: parent
+
+        self._images = {
+            'dark': QPixmap(path.format('dark')),
+            'light': QPixmap(path.format('light'))
+        }
 
         self._preview_img = QLabel(self)
         mrg = self.parent().width() // (PREVIEWS_NUM_PER_ROW * 3)
@@ -34,9 +39,9 @@ class BasePreview(QWidget):
 
         self._theme: Theme = ...  # will be set in set_theme method
 
-    def set_theme(self, theme: Theme, img: QPixmap) -> None:
+    def set_theme(self, theme: Theme) -> None:
         self._theme = theme
-        self._preview_img.setPixmap(img.scaled(self._image_width, self._image_height))
+        self._preview_img.setPixmap(self._images[theme.theme].scaled(self._image_width, self._image_height))
         self.leaveEvent()  # forcing color setting on widget run
         self.setFixedSize(self._preview_img.sizeHint() if self.sizeHint().isEmpty() else self.sizeHint())
 
@@ -53,23 +58,23 @@ class BasePreview(QWidget):
 
 class PreparedArtPreview(BasePreview):
 
-    def __init__(self, name: str, parent: QWidget = None) -> None:
-        super().__init__(parent)
+    def __init__(self, name: str, parent: QWidget) -> None:
+        super().__init__(parent, path=os.path.join(MEDIA_URL, '{}/%s_preview_img.png' % name))
 
         self._name = name
 
         self._info_layout = QVBoxLayout(self)
         self._info_layout.setSpacing(0)
         self._info_layout.addWidget(self._preview_img)
-        self._info_layout.addWidget(QLabel(f'Name: {name}', parent))
         try:
             pb = db.get_art_row(name)[1]
         except TypeError:
             pb = '-'
-        self._info_layout.addWidget(QLabel(f'Best time: {pb}', self))
+        self._info_layout.addWidget(QLabel(f'Name: {name}\n\nBest time: {pb}', self))
 
     def set_theme(self, theme: Theme, *args: Never, **kwargs: Never) -> None:
-        super().set_theme(theme, QPixmap(os.path.join(MEDIA_URL, f'{theme.theme}/{self._name}_preview_img.png')))
+        super().set_theme(theme)
+        set_text_color(self._info_layout, theme.FONT_COLOR)
 
     def mousePressEvent(self, *e: QMouseEvent) -> None:
         super().mousePressEvent(*e, art=SavedArt(self._name))
@@ -77,8 +82,11 @@ class PreparedArtPreview(BasePreview):
 
 class CustomArtPreview(BasePreview):
 
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent, path=os.path.join(MEDIA_URL, '{}/custom_preview_img.svg'))
+
     def set_theme(self, theme: Theme, *args: Never, **kwargs: Never) -> None:
-        super().set_theme(theme, QPixmap(os.path.join(MEDIA_URL, f'{theme.theme}/custom_preview_img.svg')))
+        super().set_theme(theme)
 
     def mousePressEvent(self, *e: QMouseEvent) -> None:
         super().mousePressEvent(*e, art=CustomArt())
@@ -156,10 +164,50 @@ class UserArtsOverview(QWidget):
         self._offset += self._limit
         if self._items_layout.count() == 1:  # if only spacer added
             self._items_layout.insertWidget(0, QLabel("There's nothing here yet", self), alignment=Qt.AlignHCenter)
+        set_text_color(self._items_layout, self._theme.FONT_COLOR)
 
     def closeEvent(self, e: QCloseEvent) -> None:
         self.parent().setEnabled(True)
         self.close()
+
+
+class ThemeSwitcher(QLabel):
+    switched = pyqtSignal(Theme)
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+
+        self._theme = Theme(db.get_setting_value('theme'))
+
+        size = self.parent().height() // 5 // 3   # 1/3 height from _user_utils layout
+        self.setPixmap(QPixmap(os.path.join(MEDIA_URL, 'general/switch_theme.svg')).scaled(size, size))
+        self.setMaximumSize(size + 15, size)  # 15px is an extra space for animation
+        self.mousePressEvent = lambda e: self._animate()
+
+        self._pixmap = self.pixmap().copy()
+        self._animation = QVariantAnimation(self)
+        self._animation.setStartValue(0)
+        self._animation.setEndValue(180)
+        self._animation.setDuration(1000)
+        self._animation.valueChanged.connect(lambda value: self._rotate(value))
+        self._is_signal_emitted = False
+
+    @property
+    def theme(self) -> Theme:
+        return self._theme
+
+    def _rotate(self, value: int) -> None:
+        self.setPixmap(self._pixmap.transformed(QTransform().rotate(value)))
+        if self._is_signal_emitted is False and value > self._animation.endValue() // 2:
+            self._is_signal_emitted = True
+            self._theme = self._theme.switch()
+            self.switched.emit(self._theme)
+        if value == self._animation.endValue():
+            self._is_signal_emitted = False
+            self._pixmap = self.pixmap().copy()
+
+    def _animate(self) -> None:
+        self._animation.start()
 
 
 class Menu(QWidget):
@@ -190,13 +238,8 @@ class Menu(QWidget):
         self._user_utils = QHBoxLayout(self)
 
         self._add_custom = CustomArtPreview(self)
-        self._theme_switcher = QLabel(self)
-        switcher_size = self.height() // 3 // 5  # 20% from _user_utils layout
-        self._theme_switcher.setPixmap(
-            QPixmap(os.path.join(MEDIA_URL, 'general/switch_theme.svg')).scaled(switcher_size, switcher_size)
-        )
-        self._theme_switcher.mousePressEvent = lambda e: self._set_theme(self._theme.switch())
-        self._theme_switcher.setMaximumSize(self._theme_switcher.pixmap().size())
+        self._theme_switcher = ThemeSwitcher(self)
+        self._theme_switcher.switched.connect(lambda theme: self._set_theme(theme))
         self._user_utils.addWidget(self._theme_switcher, alignment=Qt.AlignBottom | Qt.AlignLeft)
         self._user_utils.addWidget(self._add_custom)
         self._actions_layout = QVBoxLayout(self)
@@ -222,19 +265,23 @@ class Menu(QWidget):
         self._main_layout.addLayout(self._prepared_previews_layout, stretch=3)  # 60% of window height
         self._main_layout.addLayout(self._user_utils, stretch=1)  # 20% of window height
 
-        self._set_theme(Theme(db.get_setting_value('theme')))
+        self._backgrounds = {
+            'dark': QPixmap(Theme('dark').MENU_BACKGROUND_IMAGE_URL),
+            'light': QPixmap(Theme('light').MENU_BACKGROUND_IMAGE_URL)
+        }
+        self._set_theme(self._theme_switcher.theme)
 
     def _show_user_arts(self) -> None:
         self.setEnabled(False)
-        area = UserArtsOverview(self._theme, limit=50, parent=self)
+        area = UserArtsOverview(self._theme_switcher.theme, limit=50, parent=self)
         area.show()
 
     def _set_theme(self, theme: Theme) -> None:
-        self._theme = theme
-        self._bg.setBrush(QPalette.Background, QBrush(QPixmap(theme.MENU_BACKGROUND_IMAGE_URL).scaled(self.size())))
+        self._bg.setBrush(QPalette.Background, QBrush(self._backgrounds[theme.theme].scaled(self.size())))
         self.setPalette(self._bg)
-        self._show_user_arts_btn.setStyleSheet(f'background-color: {self._theme.PREVIEW_BACKGROUND_COLOR.name()};')
-        self._exit_btn.setStyleSheet(f'background-color: {self._theme.PREVIEW_BACKGROUND_COLOR.name()};')
+        self._show_user_arts_btn.setStyleSheet(f'background-color: {theme.PREVIEW_BACKGROUND_COLOR.name()};')
+        self._exit_btn.setStyleSheet(f'background-color: {theme.PREVIEW_BACKGROUND_COLOR.name()};')
+        set_text_color(self._actions_layout, theme.FONT_COLOR)
         for idx in range(self._prepared_previews_layout.count()):
             self._prepared_previews_layout.itemAt(idx).widget().set_theme(theme)
         self._add_custom.set_theme(theme)
