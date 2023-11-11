@@ -21,6 +21,9 @@ $ python -m pip install -r requirements.txt
 <pre>
 SpeedPixels
 ├── media
+│   ├── dark     # folder with images for dark theme
+│   ├── general     # folder with images for both themes
+│   └── light     # folder with images for light theme
 ├── SpeedPixels
 │   ├── __main__.py
 │   ├── arts.py
